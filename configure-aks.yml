@@ -1,0 +1,8 @@
+- name: Configure AKS for Deployment
+  hosts: localhost
+  tasks:
+    - name: Create Kubernetes Namespace
+      kubernetes.core.k8s:
+        state: present
+        kind: Namespace
+        name: my-app

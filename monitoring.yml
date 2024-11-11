@@ -1,0 +1,11 @@
+- name: Configure Nagios Monitoring
+  hosts: localhost
+  tasks:
+    - name: Add Kubernetes Monitoring to Nagios
+      copy:
+        content: "define host { use kubernetes-host; host_name my-app }"
+        dest: /etc/nagios/conf.d/my-app.conf
+    - name: Restart Nagios
+      service:
+        name: nagios
+        state: restarted

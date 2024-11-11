@@ -1,0 +1,60 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_HUB_REPO = '<dockerhub-username>/<repo>'
+        AKS_RESOURCE_GROUP = '<resource-group-name>'
+        AKS_CLUSTER_NAME = '<aks-cluster-name>'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-creds'
+        KUBE_CONFIG = credentials('kubeconfig')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/<user>/<repository>.git'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("${DOCKER_HUB_REPO}:latest")
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', DOCKER_CREDENTIALS_ID) {
+                        docker.image("${DOCKER_HUB_REPO}:latest").push()
+                    }
+                }
+            }
+        }
+        stage('Configure AKS with Ansible') {
+            steps {
+                ansiblePlaybook credentialsId: 'ansible-credentials', playbook: 'configure-aks.yml'
+            }
+        }
+        stage('Deploy to AKS') {
+            steps {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    sh 'kubectl apply -f kubernetes/deployment.yaml'
+                    sh 'kubectl apply -f kubernetes/service.yaml'
+                }
+            }
+        }
+        stage('Monitoring Setup') {
+            steps {
+                sh 'ansible-playbook monitoring.yml'
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Deployment Successful'
+        }
+        failure {
+            echo 'Deployment Failed'
+            sh 'curl -X POST http://<nagios-server>/notify -d "message=Deployment Failed"'
+        }
+    }
+}
